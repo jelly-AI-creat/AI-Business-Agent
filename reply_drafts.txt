@@ -1,0 +1,131 @@
+客户询盘回复草稿 (Reply Drafts)
+生成时间: 2026-09-17 21:54:18
+来源文件: raw_emails.txt
+邮件数量: 3
+
+==============================================================================
+邮件 #1
+==============================================================================
+发件人 (From)   : john.smith@abctrading.com
+收件人 (To)     : sales@yourcompany.com
+主题 (Subject)  : Inquiry about Wireless Bluetooth Headphones - Bulk Order
+
+【客户需求提取】
+  - 产品        : WBH-200
+  - 数量        : 500
+  - 价格要求    : FOB price
+  - 交期要求    : （未提及）
+  - 认证要求    : （未提及）
+  - 样品        : （未提及）
+  - 客户公司    : ABC Trading Co.
+  - 联系人      : John Smith
+  - 邮箱        : john.smith@abctrading.com
+  - 电话        : +1-212-555-0147
+  - 其他备注    : 询问最小起订量 (MOQ)；需要定制包装/Logo
+
+【回复草稿】
+
+Dear John Smith,
+
+Thank you for your inquiry and for your interest in our products. We are pleased to hear from you.
+
+Regarding your request for WBH-200, we are glad to confirm that we can supply this item.
+We have noted your required quantity of 500 units and will prepare a competitive quotation accordingly.
+We will provide our FOB price in the attached quotation.
+
+Additional points we will address:
+  - 询问最小起订量 (MOQ)
+  - 需要定制包装/Logo
+
+Please feel free to contact us if you have any further questions. We look forward to building a long-term business relationship with you.
+
+Best regards,
+[Your Name]
+[Your Title]
+[Your Company]
+[Email] | [Phone]
+
+==============================================================================
+邮件 #2
+==============================================================================
+发件人 (From)   : maria.garcia@eurotech.es
+收件人 (To)     : sales@yourcompany.com
+主题 (Subject)  : Request for Quotation - Solar Power Banks
+
+【客户需求提取】
+  - 产品        : Solar Power Banks
+  - 数量        : 2,000
+  - 价格要求    : unit price
+  - 交期要求    : 30 days
+  - 认证要求    : CE
+  - 样品        : （未提及）
+  - 客户公司    : EuroTech Solutions
+  - 联系人      : Maria Garcia
+  - 邮箱        : maria.garcia@eurotech.es
+  - 电话        : +34-91-555-0198
+  - 其他备注    : 询问付款条件
+
+【回复草稿】
+
+Dear Maria Garcia,
+
+Thank you for your inquiry and for your interest in our products. We are pleased to hear from you.
+
+Regarding your request for Solar Power Banks, we are glad to confirm that we can supply this item.
+We have noted your required quantity of 2,000 units and will prepare a competitive quotation accordingly.
+We will provide our unit price in the attached quotation.
+Concerning the delivery timeline (30 days), we will confirm the exact schedule once the order details are finalized.
+Our products are CE certified, and we will send you the relevant certificates for your reference.
+
+Additional points we will address:
+  - 询问付款条件
+
+Please feel free to contact us if you have any further questions. We look forward to building a long-term business relationship with you.
+
+Best regards,
+[Your Name]
+[Your Title]
+[Your Company]
+[Email] | [Phone]
+
+==============================================================================
+邮件 #3
+==============================================================================
+发件人 (From)   : david.lee@smartelectronics.sg
+收件人 (To)     : sales@yourcompany.com
+主题 (Subject)  : Urgent Inquiry - USB-C Charging Cables
+
+【客户需求提取】
+  - 产品        : USB-C Charging Cables
+  - 数量        : 10,000
+  - 价格要求    : CIF price, best price
+  - 交期要求    : （未提及）
+  - 认证要求    : （未提及）
+  - 样品        : Requested
+  - 客户公司    : Smart Electronics Pte Ltd
+  - 联系人      : David Lee
+  - 邮箱        : david.lee@smartelectronics.sg
+  - 电话        : +65-6555-0123
+  - 其他备注    : 紧急需求，需尽快回复
+
+【回复草稿】
+
+Dear David Lee,
+
+Thank you for your inquiry and for your interest in our products. We are pleased to hear from you.
+
+Regarding your request for USB-C Charging Cables, we are glad to confirm that we can supply this item.
+We have noted your required quantity of 10,000 units and will prepare a competitive quotation accordingly.
+We will provide our CIF price, best price in the attached quotation.
+We are happy to arrange samples for your evaluation. Please confirm your shipping address so we can dispatch them promptly.
+
+Additional points we will address:
+  - 紧急需求，需尽快回复
+
+Please feel free to contact us if you have any further questions. We look forward to building a long-term business relationship with you.
+
+Best regards,
+[Your Name]
+[Your Title]
+[Your Company]
+[Email] | [Phone]
