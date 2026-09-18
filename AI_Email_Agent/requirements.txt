@@ -1,0 +1,8 @@
+# LLM 版脚本（email_reply_drafter_llm.py）所需依赖
+# 离线版 email_reply_drafter.py 不需要任何第三方依赖
+#
+# 安装：python -m pip install -r requirements.txt
+# 若卡在 "Collecting ..."（连不上 pypi.org），改用清华镜像：
+#   python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+requests==2.34.2
+python-dotenv==1.2.3

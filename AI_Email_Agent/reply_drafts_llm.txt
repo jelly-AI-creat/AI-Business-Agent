@@ -1,0 +1,134 @@
+客户询盘回复草稿 - LLM 版 (Reply Drafts, LLM edition)
+生成时间: 2026-09-18 19:29:39
+来源文件: raw_emails.txt
+邮件数量: 3
+生成方式: DeepSeek deepseek-flash
+回复语气: formal
+
+处理状态: LLM: deepseek-flash | 用时 22.7s | tokens 输入 550 / 输出 200
+==============================================================================
+邮件 #1
+==============================================================================
+发件人 (From)   : john.smith@abctrading.com
+收件人 (To)     : sales@yourcompany.com
+主题 (Subject)  : Inquiry about Wireless Bluetooth Headphones - Bulk Order
+
+【客户需求提取】
+  - 产品        : WBH-200
+  - 数量        : 500
+  - 价格要求    : FOB price
+  - 交期要求    : （未提及）
+  - 认证要求    : （未提及）
+  - 样品        : （未提及）
+  - 客户公司    : ABC Trading Co.
+  - 联系人      : John Smith
+  - 邮箱        : john.smith@abctrading.com
+  - 电话        : +1-212-555-0147
+  - 其他备注    : 询问最小起订量 (MOQ)；需要定制包装/Logo
+
+【回复草稿】
+
+Dear John Smith,
+
+Thank you for your inquiry regarding our Wireless Bluetooth Headphones, Model WBH-200, and for considering us for your trial order of 500 units. We appreciate the opportunity to work with ABC Trading Co.
+
+We note your request for our best FOB price for 500 units, the estimated lead time for delivery to New York, the minimum order quantity (MOQ), and whether packaging can be customized with your company logo.
+
+Please allow us to confirm the following details in our next email: FOB price for 500 units, MOQ, lead time to New York, and the feasibility and requirements for customized packaging with your logo. We will also confirm applicable certifications and sample availability at that time.
+
+Should you have any further specifications or target timelines, please share them so we can address them together with the above points.
+
+We will revert shortly with the requested information.
+
+Best regards,
+
+[Your Name]
+[Your Title]
+[Your Company]
+[Email] | [Phone]
+
+处理状态: LLM: deepseek-flash | 用时 1.3s | tokens 输入 538 / 输出 220
+==============================================================================
+邮件 #2
+==============================================================================
+发件人 (From)   : maria.garcia@eurotech.es
+收件人 (To)     : sales@yourcompany.com
+主题 (Subject)  : Request for Quotation - Solar Power Banks
+
+【客户需求提取】
+  - 产品        : Solar Power Banks
+  - 数量        : 2,000
+  - 价格要求    : unit price
+  - 交期要求    : 30 days
+  - 认证要求    : CE
+  - 样品        : （未提及）
+  - 客户公司    : EuroTech Solutions
+  - 联系人      : Maria Garcia
+  - 邮箱        : maria.garcia@eurotech.es
+  - 电话        : +34-91-555-0198
+  - 其他备注    : 询问付款条件
+
+【回复草稿】
+
+Dear Maria Garcia,
+
+Thank you for your inquiry regarding our Solar Power Banks (20000mAh) and for considering us as a supplier. We appreciate the opportunity to work with EuroTech Solutions.
+
+We note your requirement for 2,000 units per month on a recurring basis, with unit pricing requested for both 2,000 and 5,000 units. We also note your required delivery timeline of within 30 days of order confirmation, your need for CE certification and supporting documents for the European market, and your request for our payment terms.
+
+Please find our responses below:
+
+Unit price for 2,000 units: [to be confirmed]
+Unit price for 5,000 units: [to be confirmed]
+Payment terms: [to be confirmed]
+CE certification status: [to be confirmed]
+Lead time: [to be confirmed]
+
+We will confirm these details in our next email. Should you require samples, please let us know and we will advise accordingly.
+
+We look forward to your reply.
+
+[Your Name]
+[Your Title]
+[Your Company]
+[Email] | [Phone]
+
+处理状态: LLM: deepseek-flash | 用时 1.2s | tokens 输入 559 / 输出 191
+==============================================================================
+邮件 #3
+==============================================================================
+发件人 (From)   : david.lee@smartelectronics.sg
+收件人 (To)     : sales@yourcompany.com
+主题 (Subject)  : Urgent Inquiry - USB-C Charging Cables
+
+【客户需求提取】
+  - 产品        : USB-C Charging Cables
+  - 数量        : 10,000
+  - 价格要求    : CIF price, best price
+  - 交期要求    : （未提及）
+  - 认证要求    : （未提及）
+  - 样品        : Requested
+  - 客户公司    : Smart Electronics Pte Ltd
+  - 联系人      : David Lee
+  - 邮箱        : david.lee@smartelectronics.sg
+  - 电话        : +65-6555-0123
+  - 其他备注    : 紧急需求，需尽快回复
+
+【回复草稿】
+
+Dear David Lee,
+
+Thank you for your urgent inquiry regarding USB-C Charging Cables (2 meters, braided nylon) for Smart Electronics Pte Ltd. We appreciate your interest and will respond promptly.
+
+We confirm your requirement for 10,000 units and your request for a CIF Singapore price. Please note that our best CIF price is [to be confirmed], and we will provide this in our next email once we have verified the details.
+
+Regarding samples, we are happy to send 3 samples to your address. The sample cost and shipping will be [to be confirmed], and we will confirm the arrangement shortly.
+
+We have noted your need to finalize your supplier this week and will prioritize your request. Any lead time and certification details will also be confirmed in our next reply.
+
+Thank you for your patience. We look forward to your reply.
+
+[Your Name]
+[Your Title]
+[Your Company]
+[Email] | [Phone]
