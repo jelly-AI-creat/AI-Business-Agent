@@ -1,0 +1,66 @@
+# ============================================================================
+# LED 产品知识库（products.txt）—— 唯一的规格与 FOB 报价来源
+#
+# 用途：inquiry_core.py 的 generate_reply() 在生成英文回复前会先读这个文件。
+#       只要客户询盘里出现了下面的产品，回复草稿就会原样引用这里的规格和价格；
+#       没有匹配到产品时，回复里不会出现任何报价，绝不凭空编造。
+#
+# 维护方法：直接编辑本文件即可（不用改代码）。格式：
+#       [产品名]
+#       model:      型号（可选；客户直接报型号也能匹配到）
+#       keywords:   用于匹配客户询盘的关键词，英文逗号分隔
+#       power / voltage / ip rating: 功率、电压、防水等级（回复里排在最前）
+#       其他任意键: 值              按这里的先后顺序出现在规格清单里
+#       price / price unit / incoterm: 单价、计价单位、贸易术语（FOB Shenzhen）
+#       moq / lead time / warranty: 起订量、交期、质保
+# 改完保存后，重启网页（或点侧边栏「重新加载脚本」）即可生效。
+# ============================================================================
+
+[LED High Bay Light]
+model: HB-150
+keywords: high bay, highbay, warehouse light, industrial high bay, ufo light
+power: 150W
+voltage: 100-277V AC, 50/60Hz
+ip rating: IP65
+colour temperature: 4000K / 5700K
+luminous efficacy: 140 lm/W
+material: die-cast aluminium housing, PC lens
+price: USD 28.50
+price unit: per piece
+incoterm: FOB Shenzhen
+moq: 200 pieces
+lead time: 20-25 working days
+warranty: 5 years
+
+[LED Panel Light]
+model: PL-40
+keywords: panel light, led panel, ceiling panel, troffer, office lighting
+power: 40W
+voltage: 220-240V AC, 50/60Hz
+ip rating: IP20
+colour temperature: 3000K / 4000K / 6500K
+luminous efficacy: 110 lm/W
+size: 595 x 595 x 9 mm
+material: aluminium frame, PMMA diffuser
+price: USD 8.90
+price unit: per piece
+incoterm: FOB Shenzhen
+moq: 500 pieces
+lead time: 15-20 working days
+warranty: 3 years
+
+[LED Street Light]
+model: SL-100
+keywords: street light, streetlight, roadway light, road lamp, outdoor street light
+power: 100W
+voltage: 100-277V AC, 50/60Hz
+ip rating: IP66
+colour temperature: 4000K / 5700K
+luminous efficacy: 150 lm/W
+material: die-cast aluminium, tempered glass
+price: USD 35.80
+price unit: per piece
+incoterm: FOB Shenzhen
+moq: 100 pieces
+lead time: 25-30 working days
+warranty: 5 years

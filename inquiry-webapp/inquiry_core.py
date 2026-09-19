@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 # ---------------------------------------------------------------- 数据模型
 
@@ -88,33 +88,6 @@ _MISSING_ORDER = [
     FIELD_PRODUCT, FIELD_QTY, FIELD_SPEC, FIELD_CERT,
     FIELD_DEST, FIELD_PRICE, FIELD_LEAD_TIME, FIELD_PAYMENT,
 ]
-
-# 回复草稿里用的英文字段名
-_FIELD_EN: dict[str, str] = {
-    FIELD_PRODUCT: "Product / model",
-    FIELD_QTY: "Quantity",
-    FIELD_SPEC: "Specifications",
-    FIELD_CERT: "Certificates required",
-    FIELD_DEST: "Destination / port",
-    FIELD_PRICE: "Target price",
-    FIELD_LEAD_TIME: "Required delivery time",
-    FIELD_PAYMENT: "Payment terms",
-    FIELD_INCOTERM: "Trade term",
-    FIELD_REQUEST: "Requested documents / services",
-}
-
-# 回复草稿里用的英文"客户诉求"标签
-_REQUEST_EN: dict[str, str] = {
-    "报价/价格": "price / quotation",
-    "产品目录": "product catalogue",
-    "样品": "sample",
-    "MOQ": "MOQ",
-    "交期/生产周期": "lead time",
-    "付款方式": "payment terms",
-    "认证/检测报告": "certificates / test reports",
-    "OEM/ODM 贴牌": "OEM / ODM service",
-    "包装要求": "packaging requirement",
-}
 
 # 你自己的脚本若用英文/别的字段名，这里做一次归一化，
 # 好让"缺失信息"的判断在接入你的脚本后依然生效
@@ -506,17 +479,406 @@ def analyze(text: str, *, use_legacy: bool = True) -> InquiryAnalysis:
     return _analyze_builtin(text)
 
 
+# ---------------------------------------------------------------- 产品知识库
+# products.txt 是产品规格和 FOB 报价的唯一来源：generate_reply() 每次都会先读它，
+# 询盘里出现了知识库中的产品，回复草稿就必须原样带上该产品的规格和价格。
+# 读不到文件、或询盘里没有对应产品时，宁可不报价，也绝不编造数字
+# （生成后可以用 find_fabricated_prices() 自检）。
+
+PRODUCTS_FILENAME = "products.txt"
+PRODUCTS_PATH = Path(__file__).with_name(PRODUCTS_FILENAME)
+_MAX_QUOTED_PRODUCTS = 3  # 一封回复最多列几个产品的报价
+
+# 下面这些键在报价里单独成行，不放进通用规格列表
+_PRODUCT_META_KEYS = {
+    "model", "keywords", "price", "price unit", "incoterm",
+    "moq", "lead time", "warranty",
+    "power", "voltage", "ip rating", "ip",
+}
+
+# 规格键 -> 回复里的英文标签（没列出的键自动转成标题格式）
+_SPEC_EN_LABELS = {
+    "power": "Power",
+    "voltage": "Voltage",
+    "ip rating": "IP rating",
+    "ip": "IP rating",
+    "colour temperature": "Colour temperature",
+    "color temperature": "Colour temperature",
+    "luminous efficacy": "Luminous efficacy",
+    "size": "Size",
+    "material": "Material",
+}
+
+
+@dataclass(frozen=True)
+class Product:
+    """一个产品的规格与报价，字段全部来自 products.txt。"""
+
+    name: str
+    model: str = ""
+    power: str = ""
+    voltage: str = ""
+    ip_rating: str = ""
+    specs: tuple[tuple[str, str], ...] = ()
+    price: str = ""
+    price_unit: str = ""
+    incoterm: str = ""
+    moq: str = ""
+    lead_time: str = ""
+    warranty: str = ""
+    keywords: tuple[str, ...] = ()
+
+    @property
+    def price_line(self) -> str:
+        """报价写法，例如 'USD 28.50 per piece, FOB Shenzhen'。"""
+        parts = [self.price, self.price_unit]
+        line = " ".join(part for part in parts if part)
+        if self.incoterm:
+            line = f"{line}, {self.incoterm}" if line else self.incoterm
+        return line
+
+    def spec_lines(self) -> list[tuple[str, str]]:
+        """规格行；功率、电压、防水等级排在最前，其余按 products.txt 的顺序。"""
+        lines: list[tuple[str, str]] = []
+        for label, value in (
+            ("Power", self.power),
+            ("Voltage", self.voltage),
+            ("IP rating", self.ip_rating),
+        ):
+            if value:
+                lines.append((label, value))
+        lines.extend(self.specs)
+        for label, value in (("MOQ", self.moq), ("Lead time", self.lead_time), ("Warranty", self.warranty)):
+            if value:
+                lines.append((label, value))
+        return lines
+
+
 # ---------------------------------------------------------------- 英文回复草稿
 
 
-def _value_for_reply(field_name: str, value: str) -> str:
-    """把中文的提取结果转成适合放进英文邮件里的写法。"""
-    if field_name == FIELD_REQUEST:
-        parts = [part.strip() for part in value.split("、") if part.strip()]
-        return ", ".join(_REQUEST_EN.get(part, part) for part in parts)
-    if field_name == FIELD_SPEC:
-        return value.replace("；", "; ").replace("其他参数", "other specs")
-    return value
+def _spec_label(key: str) -> str:
+    return _SPEC_EN_LABELS.get(key, key.strip().title())
+
+
+def _product_from_fields(name: str, fields: dict[str, str]) -> Product:
+    """把 [产品名] 区块下的键值对变成一个 Product。"""
+    specs = tuple(
+        (_spec_label(key), value)
+        for key, value in fields.items()
+        if key not in _PRODUCT_META_KEYS and value
+    )
+    return Product(
+        name=name,
+        model=fields.get("model", ""),
+        power=fields.get("power", ""),
+        voltage=fields.get("voltage", ""),
+        ip_rating=fields.get("ip rating", fields.get("ip", "")),
+        specs=specs,
+        price=fields.get("price", ""),
+        price_unit=fields.get("price unit", ""),
+        incoterm=fields.get("incoterm", ""),
+        moq=fields.get("moq", ""),
+        lead_time=fields.get("lead time", ""),
+        warranty=fields.get("warranty", ""),
+        keywords=tuple(word.strip() for word in fields.get("keywords", "").split(",") if word.strip()),
+    )
+
+
+def parse_products(text: str) -> list[Product]:
+    """把 products.txt 的文本解析成 Product 列表（纯函数，方便单独测试）。"""
+    products: list[Product] = []
+    current_name = ""
+    current_fields: dict[str, str] = {}
+
+    def flush() -> None:
+        if current_name:
+            products.append(_product_from_fields(current_name, dict(current_fields)))
+
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            flush()
+            current_name = line[1:-1].strip()
+            current_fields = {}
+            continue
+        if ":" not in line or not current_name:
+            continue
+        key, value = line.split(":", 1)
+        current_fields[key.strip().lower()] = value.strip()
+    flush()
+    return products
+
+
+@lru_cache(maxsize=1)
+def load_products() -> tuple[Product, ...]:
+    """读取 products.txt；文件缺失或为空时返回空元组（此时回复里不含任何报价）。"""
+    try:
+        text = PRODUCTS_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return ()
+    return tuple(parse_products(text))
+
+
+def reload_products() -> None:
+    """改完 products.txt 后清缓存，下次生成回复会重新读取。"""
+    load_products.cache_clear()
+
+
+def _product_score(haystack: str, product: Product) -> int:
+    """询盘文本命中产品名 / 型号 / 关键词的程度，0 表示不相关。"""
+    score = 0
+    if product.name and product.name.lower() in haystack:
+        score += 4
+    if product.model and product.model.lower() in haystack:
+        score += 4
+    for keyword in product.keywords:
+        if keyword and keyword.lower() in haystack:
+            score += 2
+    return score
+
+
+def match_products(text: str, products: Sequence[Product] | None = None) -> list[Product]:
+    """找出询盘里提到的产品；没提到就返回空列表（不猜、不硬凑）。"""
+    if products is None:
+        products = load_products()
+    haystack = (text or "").lower()
+    if not haystack.strip():
+        return []
+    scored: list[tuple[int, Product]] = []
+    for product in products:
+        score = _product_score(haystack, product)
+        if score:
+            scored.append((score, product))
+    scored.sort(key=lambda item: item[0], reverse=True)  # 稳定排序：同分时保持 products.txt 的顺序
+    return [product for _, product in scored[:_MAX_QUOTED_PRODUCTS]]
+
+
+_POWER_TOKEN_RE = re.compile(r"(\d{2,4})\s*W\b", re.IGNORECASE)
+# 金额里的数字：允许 5,000 / 28.50 这类写法，但不吞掉后面的逗号、句号
+_PRICE_NUMBER = r"(?:\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)"
+_PRICE_TOKEN_RE = re.compile(
+    rf"(?:USD|EUR|CNY|RMB|GBP|JPY|AUD|CAD|US\$|\$|€|¥)\s?{_PRICE_NUMBER}"
+    rf"|{_PRICE_NUMBER}\s?(?:USD|EUR|CNY|RMB|dollars?)",
+    re.IGNORECASE,
+)
+
+
+def _normalize_price(token: str) -> str:
+    """把 'USD 28.50' / '28.50 USD' 这类写法归一，便于比对。"""
+    return re.sub(r"\s+", "", token).upper().rstrip(",;:")
+
+
+def _reply_context(analysis: InquiryAnalysis) -> str:
+    """用于匹配产品的文本：提取到的产品字段 + 询盘原文。"""
+    return "\n".join(
+        part for part in (analysis.value_of(FIELD_PRODUCT), analysis.raw_text) if part
+    )
+
+
+def _product_quote_lines(products: Sequence[Product]) -> list[str]:
+    """把知识库里的规格和 FOB 报价原样渲染成英文段落（不加工、不换算）。"""
+    if not products:
+        return []
+    lines: list[str] = [
+        "Quotation for your reference (our current price list, FOB Shenzhen):",
+        "",
+    ]
+    for product in products:
+        title = f"{product.name} (Model: {product.model})" if product.model else product.name
+        lines.append(f"- {title}")
+        for label, value in product.spec_lines():
+            lines.append(f"  · {label}: {value}")
+        if product.price_line:
+            lines.append(f"  · Price: {product.price_line}")
+        lines.append("")
+    lines.append(
+        "All specifications and prices above are taken directly from our product list; "
+        "they are valid for the order quantity shown as MOQ and will be confirmed in the formal offer."
+    )
+    return lines
+
+
+def _product_conflict_lines(analysis: InquiryAnalysis, product: Product) -> list[str]:
+    """客户要求的功率和知识库不一致时，明确指出差异，绝不按客户要的数字编报价。"""
+    requested = {int(num) for num in _POWER_TOKEN_RE.findall(analysis.value_of(FIELD_SPEC))}
+    ours = {int(num) for num in _POWER_TOKEN_RE.findall(product.power)}
+    if not requested or not ours or requested & ours:
+        return []
+    requested_text = " / ".join(f"{num}W" for num in sorted(requested))
+    ours_text = " / ".join(f"{num}W" for num in sorted(ours))
+    return [
+        f"Please note that you mentioned {requested_text}, while our {product.name} "
+        f"(Model: {product.model}) listed above is rated {ours_text}. The price shown applies to the "
+        f"{ours_text} version only; if you need {requested_text} we will check availability and come "
+        f"back to you with a separate quotation."
+    ]
+
+
+def _ensure_product_data(draft: str, products: Sequence[Product]) -> str:
+    """外部脚本生成的草稿：如果漏了知识库里的报价就补上，绝不改动或编造已有数字。"""
+    if not products:
+        return draft
+    draft_lower = draft.lower()
+    missing: list[Product] = []
+    for product in products:
+        numbers = re.findall(r"\d[\d,]*(?:\.\d+)?", product.price)
+        if product.price and not (numbers and numbers[0].lower() in draft_lower):
+            missing.append(product)
+    if not missing:
+        return draft
+    block_text = "\n".join(_product_quote_lines(missing))
+    return f"{draft.rstrip()}\n\n{block_text}"
+
+
+def find_fabricated_prices(
+    text: str,
+    products: Sequence[Product] | None = None,
+    *,
+    allow: Sequence[str] = (),
+) -> list[str]:
+    """自检回复里出现的金额是否都有出处，返回没有出处的金额。
+
+    出处只有两个：products.txt（我们的报价）和客户在询盘里自己提到的价格（allow）。
+    返回空列表说明没有编造。"""
+    if products is None:
+        products = load_products()
+    allowed = {_normalize_price(product.price) for product in products if product.price}
+    allowed |= {_normalize_price(token) for token in allow if token}
+    fabricated: list[str] = []
+    for match in _PRICE_TOKEN_RE.finditer(text or ""):
+        token = match.group(0)
+        if _normalize_price(token) not in allowed and token not in fabricated:
+            fabricated.append(token)
+    return fabricated
+
+
+def _join_clauses(items: Sequence[str]) -> str:
+    """把若干英文短语拼成 'a, b and c' 这样的自然枚举，避免列表堆砌。"""
+    cleaned = [str(item).strip().rstrip(".") for item in items if str(item).strip()]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    return f"{', '.join(cleaned[:-1])} and {cleaned[-1]}"
+
+
+# 规格键 -> 写进英文句子里的说法（数字照抄，只改措辞，不做换算）
+_SPEC_PROSE_PREFIX: dict[str, str] = {
+    "Colour temperature": "is available in",
+    "Luminous efficacy": "delivers a luminous efficacy of",
+    "Size": "measures",
+    "Material": "comes with",
+}
+
+
+def _product_offer_paragraph(product: Product) -> str:
+    """把一个产品的知识库数据写成一段连贯的英文报价（数字全部照抄，不加工）。"""
+    name = f"{product.name}, model {product.model}," if product.model else product.name
+
+    performance: list[str] = []
+    if product.power:
+        performance.append(f"is rated {product.power}")
+    if product.voltage:
+        performance.append(f"operates on {product.voltage}")
+    if product.ip_rating:
+        performance.append(f"has an ingress protection rating of {product.ip_rating}")
+
+    sentences: list[str] = []
+    if performance:
+        sentences.append(f"Our {name} {_join_clauses(performance)}.")
+    else:
+        sentences.append(f"Our {name} is one of our standard models.")
+
+    details: list[str] = []
+    for label, value in product.specs:
+        prefix = _SPEC_PROSE_PREFIX.get(label, f"comes with {label.lower()}")
+        parts = [part.strip() for part in value.split(",")]
+        details.append(f"{prefix} {_join_clauses(parts)}")
+    if details:
+        sentences.append(f"It {_join_clauses(details)}.")
+
+    commercial: list[str] = []
+    if product.moq:
+        commercial.append(f"a minimum order quantity of {product.moq}")
+    if product.lead_time:
+        commercial.append(f"a lead time of {product.lead_time}")
+    if product.warranty:
+        commercial.append(f"a warranty of {product.warranty}")
+    if product.price_line:
+        price = f"Our price is {product.price_line}"
+        if commercial:
+            price += ", based on " + _join_clauses(commercial)
+        sentences.append(price + ".")
+    elif commercial:
+        sentences.append("Our offer is based on " + _join_clauses(commercial) + ".")
+    return " ".join(sentences)
+
+
+def _noted_clauses(analysis: InquiryAnalysis) -> list[str]:
+    """把客户已经给出的关键信息写成短语，好接在一个句子里（不列清单）。"""
+    clauses: list[str] = []
+    qty = analysis.value_of(FIELD_QTY)
+    if qty:
+        clauses.append(f"your requirement of {qty}")
+    dest = analysis.value_of(FIELD_DEST)
+    if dest:
+        clauses.append(f"delivery to {dest}")
+    cert = analysis.value_of(FIELD_CERT)
+    if cert:
+        clauses.append(f"your requirement for {cert} certificates")
+    price = analysis.value_of(FIELD_PRICE)
+    if price:
+        clauses.append(f"your target price of {price}")
+    incoterm = analysis.value_of(FIELD_INCOTERM)
+    if incoterm:
+        clauses.append(f"the {incoterm} term")
+    lead_time = analysis.value_of(FIELD_LEAD_TIME)
+    if lead_time:
+        clauses.append(f"your required delivery time of {lead_time}")
+    return clauses
+
+
+# 客户点名、但知识库里没有现成答案的诉求：如实说会在正式报价里确认，不编数据
+_FOLLOW_UP_REQUESTS: tuple[tuple[str, str], ...] = (
+    ("付款方式", "our payment terms"),
+    ("包装要求", "the packing details"),
+    ("认证/检测报告", "the corresponding test reports"),
+    ("OEM/ODM 贴牌", "the details of our OEM / ODM service"),
+)
+
+
+def _request_paragraphs(analysis: InquiryAnalysis) -> list[str]:
+    """礼貌回应客户点名的资料 / 服务，写成连贯的句子。"""
+    requested = analysis.value_of(FIELD_REQUEST)
+    if not requested:
+        return []
+    paragraphs: list[str] = []
+    wants_catalogue = "产品目录" in requested
+    wants_sample = "样品" in requested
+    if wants_catalogue and wants_sample:
+        paragraphs.append(
+            "As you requested, we will send you our latest catalogue together with the detailed "
+            "quotation, and we will gladly arrange samples for your evaluation. Could you kindly "
+            "let us know which models and how many samples you would need?"
+        )
+    elif wants_catalogue:
+        paragraphs.append(
+            "As you requested, we will send you our latest catalogue together with the detailed quotation."
+        )
+    elif wants_sample:
+        paragraphs.append(
+            "As you requested, we will gladly arrange samples for your evaluation. Could you kindly "
+            "let us know which models and how many samples you would need?"
+        )
+    follow_up = [text for label, text in _FOLLOW_UP_REQUESTS if label in requested]
+    if follow_up:
+        paragraphs.append(
+            "We will also confirm " + _join_clauses(follow_up) + " in our formal offer."
+        )
+    return paragraphs
 
 
 def _build_reply(
@@ -525,65 +887,91 @@ def _build_reply(
     company: str = "",
     sender: str = "",
     sign_off: str = "Best regards",
+    products: Sequence[Product] | None = None,
 ) -> str:
-    """按模板生成英文回复草稿（纯规则，不调用 AI，稳定且不花钱）。"""
+    """生成标准商务英文邮件（纯规则，不调用 AI，稳定、不花钱）。
+
+    排版：称呼 → 感谢询盘 → 用连贯句子给出正式报价（数据全部来自 products.txt）
+    → 礼貌询问缺失信息 → 结语与署名；全程不用列表堆砌，规格和价格也绝不编造。
+    """
     product = analysis.value_of(FIELD_PRODUCT)
     contact = analysis.value_of(FIELD_CONTACT)
     subject = f"Re: Your inquiry about {product}" if product else "Re: Your inquiry"
 
+    paragraphs: list[str] = []
+
+    # ① 称呼 + ② 感谢询盘（紧急询盘顺带说明已优先处理）
+    about = f" about {product}" if product else ""
+    thanks = (
+        f"Thank you very much for your inquiry{about} and for your interest in our products. "
+        "It is a great pleasure to hear from you."
+    )
+    if analysis.is_urgent:
+        thanks += (
+            " We have also noticed that your inquiry is urgent and have marked it as a priority, "
+            "so our sales team will handle it first."
+        )
+    paragraphs.append(thanks)
+
+    # ③ 已知的需求写成一句话，不做「字段: 值」的罗列
+    noted = _noted_clauses(analysis)
+    if noted:
+        paragraphs.append(
+            "We have carefully read your message and noted " + _join_clauses(noted) + "."
+        )
+
+    # ④ 正式报价：只用 products.txt 里的数据，用连贯的句子表达
+    quoted = list(products or [])
+    if quoted:
+        intro = "We are pleased to offer you the following, based on our current price list:"
+        if analysis.value_of(FIELD_SPEC):
+            intro = (
+                "We have compared the specifications you outlined with our standard model, and we "
+                "are pleased to offer you the following, based on our current price list:"
+            )
+        paragraphs.append(intro)
+        for item in quoted:
+            paragraphs.append(_product_offer_paragraph(item))
+        for item in quoted:
+            paragraphs.extend(_product_conflict_lines(analysis, item))
+        paragraphs.append(
+            "All of the specifications and prices above are taken directly from our current price "
+            "list and will be confirmed in our formal offer."
+        )
+
+    # ⑤ 礼貌询问缺失的信息
+    missing = [_MISSING_EN.get(name, name) for name in analysis.missing]
+    if missing:
+        paragraphs.append(
+            "To work out an exact offer for your project, could you kindly let us know "
+            + _join_clauses(missing) + "?"
+        )
+
+    # ⑥ 客户点名的资料 / 服务：能答的当场答，答不了的如实说明会在正式报价里确认
+    paragraphs.extend(_request_paragraphs(analysis))
+
+    # ⑦ 结语与署名
+    if quoted:
+        paragraphs.append(
+            "We will send you our formal offer with the complete specification, packing details and "
+            "payment terms as soon as we receive your confirmation."
+        )
+    else:
+        paragraphs.append(
+            "Once we have the above information, we will send you our best price together with the "
+            "detailed specification, MOQ, production lead time, payment terms and packing details "
+            "within one working day."
+        )
+    paragraphs.append(
+        "If you have any further questions in the meantime, please feel free to contact me directly. "
+        "We look forward to your reply and to the pleasure of working with you."
+    )
+
     lines: list[str] = [f"Subject: {subject}", ""]
     lines.append(f"Dear {contact}," if contact else "Dear Sir or Madam,")
-    lines.append("")
-    lines.append(
-        "Thank you very much for your inquiry and for your interest in our products. "
-        "It is a pleasure to hear from you."
-    )
-    lines.append("")
-    if analysis.is_urgent:
-        lines.append(
-            "We noticed that your inquiry is urgent, so we have marked it as a priority "
-            "and our sales team will handle it first."
-        )
+    for paragraph in paragraphs:
         lines.append("")
-
-    summary = [
-        (_FIELD_EN[item.field], _value_for_reply(item.field, item.value))
-        for item in analysis.requirements
-        if item.field in _FIELD_EN
-    ]
-    if summary:
-        lines.append("We have carefully reviewed your email and noted the following requirements:")
-        lines.append("")
-        lines.extend(f"- {label}: {value}" for label, value in summary)
-        lines.append("")
-
-    if analysis.missing:
-        lines.append("To work out an exact quotation for you, could you please confirm the following points?")
-        lines.append("")
-        lines.extend(
-            f"{index}. {_MISSING_EN.get(name, name)}"
-            for index, name in enumerate(analysis.missing, start=1)
-        )
-        lines.append("")
-
-    lines.append(
-        "Once we have the above information, we will send you our best price together with the detailed "
-        "specification, MOQ, production lead time, payment terms and packing details within one working day."
-    )
-    lines.append("")
-
-    requested = analysis.value_of(FIELD_REQUEST)
-    if "样品" in requested or "产品目录" in requested:
-        lines.append(
-            "As requested, we will also send you our latest catalogue, and we are happy to arrange "
-            "a sample for your evaluation."
-        )
-        lines.append("")
-
-    lines.append(
-        "If you have any questions in the meantime, please feel free to contact me directly. "
-        "We look forward to your reply and to a long-term cooperation with you."
-    )
+        lines.append(paragraph)
     lines.append("")
     lines.append(f"{sign_off},")
     lines.append(sender or "[Your Name]")
@@ -599,7 +987,14 @@ def generate_reply(
     sign_off: str = "Best regards",
     use_legacy: bool = True,
 ) -> str:
-    """生成英文回复草稿；接上了你自己的脚本时，优先用它的 generate_reply()。"""
+    """生成英文回复草稿；接上了你自己的脚本时，优先用它的 generate_reply()。
+
+    不管走哪条路，都先读 products.txt：只要询盘里出现了知识库中的产品，
+    草稿就必须带上该产品准确的规格和 FOB 报价；没匹配到就不出现任何报价，
+    绝不凭空编造（可用 find_fabricated_prices() 复核）。
+    """
+    matched = match_products(_reply_context(analysis))
+
     if use_legacy:
         module = load_legacy_module()
         generator = getattr(module, "generate_reply", None) if module is not None else None
@@ -613,8 +1008,10 @@ def generate_reply(
                 except Exception:  # 你的脚本报错就退回内置模板
                     break
                 if isinstance(draft, str) and draft.strip():
-                    return draft
-    return _build_reply(analysis, company=company, sender=sender, sign_off=sign_off)
+                    # 外部脚本可能漏了报价，用知识库补齐（只补、不改它写的数字）
+                    return _ensure_product_data(draft, matched)
+
+    return _build_reply(analysis, company=company, sender=sender, sign_off=sign_off, products=matched)
 
 
 # ---------------------------------------------------------------- 接入你自己的脚本
@@ -735,4 +1132,17 @@ if __name__ == "__main__":
     print(f"缺少的信息：{'、'.join(demo.missing) if demo.missing else '无'}")
     print(f"是否紧急：{'是' if demo.is_urgent else '否'}")
     print("=" * 70)
-    print(generate_reply(demo, company="ABC Industrial Co., Ltd.", sender="Lily Chen", use_legacy=False))
+    matched = match_products(_reply_context(demo))
+    if matched:
+        print("命中知识库产品（products.txt）：", "、".join(f"{p.name} ({p.model})" for p in matched))
+    else:
+        print("询盘里没有命中 products.txt 的产品 → 回复里不会出现任何报价。")
+    reply = generate_reply(demo, company="ABC Industrial Co., Ltd.", sender="Lily Chen", use_legacy=False)
+    print(reply)
+    print("=" * 70)
+    allow = [demo.value_of(FIELD_PRICE)] if demo.value_of(FIELD_PRICE) else []
+    fabricated = find_fabricated_prices(reply, allow=allow)
+    if fabricated:
+        print(f"[FAIL] 价格自检不通过，发现没有出处的金额：{fabricated}")
+    else:
+        print("[OK] 价格自检通过：草稿里的每个金额都来自 products.txt 或客户询盘本身。")
